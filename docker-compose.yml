@@ -1,0 +1,17 @@
+services:
+  mysql-demo:
+    build: .
+    container_name: globalcard-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: globalcard
+      MYSQL_USER: demo_user
+      MYSQL_PASSWORD: demo_pass
+    ports:
+      - "3306:3306"
+    command: >
+      --innodb_buffer_pool_size=1G
+      --innodb_stats_persistent=1
+      --innodb_stats_on_metadata=0
+      --max_connections=100
