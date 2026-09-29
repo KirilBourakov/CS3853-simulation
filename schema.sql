@@ -1,14 +1,14 @@
---***************************************************************
+-- ***************************************************************
 --
 -- GlobalCard case study for CS3543, Fall 2026
 --
 -- Instructor: Andrew McAllister
 --
---***************************************************************
+-- ***************************************************************
 
--------------------------------------------------------
+-- -------------------------------------------------------
 -- Base Layer Tables (Core Profiles)
--------------------------------------------------------
+-- -------------------------------------------------------
 
 -- ============================================================
 -- 1. ADDRESS
@@ -193,9 +193,9 @@ CREATE TABLE party_address (
                     REFERENCES address (address_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--------------------------------------------------------
+-- -------------------------------------------------------
 -- The Core Account & Card Hierarchy
--------------------------------------------------------
+-- -------------------------------------------------------
 
 -- ============================================================
 -- 7. ACCOUNT
@@ -339,7 +339,7 @@ CREATE TABLE card (
 --
 -- ============================================================================
 
-CREATE TABLE transaction (
+CREATE TABLE `transaction` (
     transaction_id     BIGINT NOT NULL,
     account_id         BIGINT NOT NULL,
     -- Values for transaction_type are restricted using a CHECK constraint below
@@ -366,12 +366,16 @@ CREATE TABLE transaction (
     -- CRITICAL FOR INTEGRITY: A unique constraint on (id, type, account). 
     -- This allows child subtype tables to include and validate the type & account columns.
     CONSTRAINT UQ_transaction_account_identity 
-          UNIQUE (transaction_id, transaction_type, account_id)
+          UNIQUE (transaction_id, transaction_type, account_id),
+    -- MySQL requires an index matching the referenced columns exactly
+    -- for subtype foreign keys that do not include account_id.
+    CONSTRAINT UQ_transaction_type_identity
+          UNIQUE (transaction_id, transaction_type)
 
 );
 
 -- Indexing for quick sweeps of transactions by account
-CREATE INDEX IX_transaction_account_date ON transaction (account_id, posted_date);
+CREATE INDEX IX_transaction_account_date ON `transaction` (account_id, posted_date);
 
 -- ============================================================================
 -- 10. & 11. PEER SUBTYPE TABLES (CARD-BASED TRANSACTIONS)
@@ -403,7 +407,7 @@ CREATE TABLE tx_purchase (
     -- match the parent ledger perfectly.
     CONSTRAINT FK_tx_purchase_supertype 
         FOREIGN KEY (transaction_id, transaction_type, account_id) 
-        REFERENCES transaction (transaction_id, transaction_type, account_id) ON DELETE CASCADE,
+        REFERENCES `transaction` (transaction_id, transaction_type, account_id) ON DELETE CASCADE,
         
     -- COMPOSITE FK 2: Verifies that the card being used ACTUALLY belongs 
     -- to that exact same account_id.
@@ -433,7 +437,7 @@ CREATE TABLE tx_cash_advance (
     -- match the parent ledger perfectly.
     CONSTRAINT FK_tx_cash_advance_supertype 
         FOREIGN KEY (transaction_id, transaction_type, account_id) 
-        REFERENCES transaction (transaction_id, transaction_type, account_id) ON DELETE CASCADE,
+        REFERENCES `transaction` (transaction_id, transaction_type, account_id) ON DELETE CASCADE,
         
     -- COMPOSITE FK 2: Verifies that the card being used ACTUALLY belongs 
     -- to that exact same account_id.
@@ -474,7 +478,7 @@ CREATE TABLE tx_fee (
     
     CONSTRAINT FK_tx_fee_supertype 
         FOREIGN KEY (transaction_id, transaction_type) 
-        REFERENCES transaction (transaction_id, transaction_type) ON DELETE CASCADE
+        REFERENCES `transaction` (transaction_id, transaction_type) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -504,7 +508,7 @@ CREATE TABLE tx_interest_charge (
     
     CONSTRAINT FK_tx_interest_supertype 
         FOREIGN KEY (transaction_id, transaction_type) 
-        REFERENCES transaction (transaction_id, transaction_type) ON DELETE CASCADE
+        REFERENCES `transaction` (transaction_id, transaction_type) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -536,7 +540,7 @@ CREATE TABLE tx_payment (
     
     CONSTRAINT FK_tx_payment_supertype 
         FOREIGN KEY (transaction_id, transaction_type) 
-        REFERENCES transaction (transaction_id, transaction_type) ON DELETE CASCADE
+        REFERENCES `transaction` (transaction_id, transaction_type) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -572,7 +576,7 @@ CREATE TABLE tx_refund (
     
     CONSTRAINT FK_tx_refund_supertype 
         FOREIGN KEY (transaction_id, transaction_type) 
-        REFERENCES transaction (transaction_id, transaction_type) ON DELETE CASCADE,
+        REFERENCES `transaction` (transaction_id, transaction_type) ON DELETE CASCADE,
         
     -- Highly useful DBA constraint mapping back to original purchase history
     CONSTRAINT FK_tx_refund_to_original_purchase
@@ -608,7 +612,7 @@ CREATE TABLE tx_adjustment (
     
     CONSTRAINT FK_tx_adjustment_supertype 
         FOREIGN KEY (transaction_id, transaction_type) 
-        REFERENCES transaction (transaction_id, transaction_type) ON DELETE CASCADE
+        REFERENCES `transaction` (transaction_id, transaction_type) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -629,11 +633,11 @@ CREATE TABLE tx_adjustment (
 
 CREATE TABLE fraud_alert (
     fraud_alert_id       BIGINT UNSIGNED NOT NULL,
-    transaction_id       BIGINT UNSIGNED NOT NULL,
+    transaction_id       BIGINT NOT NULL,
     alert_timestamp      DATETIME(6) NOT NULL,
     alert_type            VARCHAR(40) NOT NULL,
 
-          ----  risk_score  ----
+          -- ----  risk_score  ----
           -- Risk score assigned by fraud-detection models.
           --
           -- Higher values indicate increased probability
@@ -651,7 +655,7 @@ CREATE TABLE fraud_alert (
 
     CONSTRAINT fk_fraud_transaction
         FOREIGN KEY (transaction_id)
-        REFERENCES financial_transaction(transaction_id),
+        REFERENCES `transaction`(transaction_id),
 
     CONSTRAINT ck_fraud_risk_score
         CHECK (risk_score >= 0 AND risk_score <= 100),
@@ -686,10 +690,10 @@ CREATE TABLE fraud_alert (
 
 CREATE TABLE risk_assessment (
     risk_assessment_id   BIGINT UNSIGNED NOT NULL,
-    transaction_id       BIGINT UNSIGNED NOT NULL,
+    transaction_id       BIGINT NOT NULL,
     assessment_timestamp DATETIME(6) NOT NULL,
 
-          ----  model_version  ----
+          -- ----  model_version  ----
           -- Version of the machine-learning model
           -- responsible for generating the risk score.
           --
@@ -700,7 +704,7 @@ CREATE TABLE risk_assessment (
     risk_score           DECIMAL(7,4) NOT NULL,
     decision             VARCHAR(20) NOT NULL,
 
-          ----  processing_time_ms  ----
+          -- ----  processing_time_ms  ----
           -- Time required by the risk engine to evaluate
           -- the transaction.
           --
@@ -714,7 +718,7 @@ CREATE TABLE risk_assessment (
 
     CONSTRAINT fk_risk_transaction
         FOREIGN KEY (transaction_id)
-        REFERENCES financial_transaction(transaction_id),
+        REFERENCES `transaction`(transaction_id),
 
           -- risk_score = 0 indicates no risk
           -- risk_score = 100 indicates highest risk
@@ -751,13 +755,13 @@ CREATE TABLE risk_assessment (
 
 CREATE TABLE authentication_event (
     authentication_event_id BIGINT UNSIGNED NOT NULL,
-    cardholder_id        BIGINT UNSIGNED NULL,
+    cardholder_id        BIGINT NULL,
     event_timestamp      DATETIME(6) NOT NULL,
     authentication_type  VARCHAR(30) NOT NULL,
     result               VARCHAR(20) NOT NULL,
     ip_address            VARCHAR(45) NULL,
 
-          ----  device_identifier  ----
+          -- ----  device_identifier  ----
           -- Identifier associated with a browser,
           -- mobile device, or application instance.
           --
@@ -771,8 +775,8 @@ CREATE TABLE authentication_event (
         PRIMARY KEY (authentication_event_id),
 
     CONSTRAINT fk_authentication_customer
-        FOREIGN KEY (customer_id)
-        REFERENCES customer(customer_id),
+        FOREIGN KEY (cardholder_id)
+        REFERENCES cardholder(cardholder_id),
 
     CONSTRAINT fk_authentication_cardholder
         FOREIGN KEY (cardholder_id)
@@ -812,8 +816,8 @@ CREATE TABLE authentication_event (
 
 CREATE TABLE cardholder_service_interaction (
     interaction_id       BIGINT UNSIGNED NOT NULL,
-    cardholder_id        BIGINT UNSIGNED NOT NULL,
-    account_id           BIGINT UNSIGNED NULL,
+    cardholder_id        BIGINT NOT NULL,
+    account_id           BIGINT NULL,
     interaction_timestamp DATETIME(6) NOT NULL,
     interaction_channel  VARCHAR(20) NOT NULL,
     interaction_type     VARCHAR(40) NOT NULL,
@@ -976,7 +980,7 @@ CREATE TABLE audit_event (
 
 CREATE TABLE account_statement (
     statement_id         BIGINT UNSIGNED NOT NULL,
-    account_id           BIGINT UNSIGNED NOT NULL,
+    account_id           BIGINT NOT NULL,
     statement_start_date DATE NOT NULL,
     statement_end_date   DATE NOT NULL,
     statement_date       DATE NOT NULL,
@@ -999,8 +1003,4 @@ CREATE TABLE account_statement (
         CHECK (statement_status IN
                ('GENERATED', 'SENT', 'REISSUED'))
 );
-
-
-
-
 

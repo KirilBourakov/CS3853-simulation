@@ -75,7 +75,7 @@ for i in range(1500):
     tx_id_seq += 1
 
 cursor.executemany("""
-    INSERT INTO transaction (transaction_id, account_id, transaction_type, amount, transaction_date, posted_date, description, is_disputed)
+    INSERT INTO `transaction` (transaction_id, account_id, transaction_type, amount, transaction_date, posted_date, description, is_disputed)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
 """, target_tx_batch)
 
@@ -105,7 +105,7 @@ while total_inserted < BACKGROUND_TX_COUNT:
         tx_id_seq += 1
 
     cursor.executemany("""
-        INSERT INTO transaction (transaction_id, account_id, transaction_type, amount, transaction_date, posted_date, description, is_disputed)
+        INSERT INTO `transaction` (transaction_id, account_id, transaction_type, amount, transaction_date, posted_date, description, is_disputed)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
     """, current_tx)
 
@@ -124,7 +124,7 @@ cursor.execute("SET unique_checks = 1;")
 conn.commit()
 
 print("[5/5] Running ANALYZE TABLE to recalculate CBO statistics...", flush=True)
-cursor.execute("ANALYZE TABLE transaction, tx_purchase, merchant, account, card;")
+cursor.execute("ANALYZE TABLE `transaction`, tx_purchase, merchant, account, card;")
 cursor.fetchall()
 conn.commit()
 

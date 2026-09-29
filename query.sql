@@ -6,7 +6,7 @@ SELECT
     tp.terminal_id,
     tp.auth_code,
     m.legal_name
-FROM transaction t
+FROM `transaction` t
 JOIN tx_purchase tp 
     ON t.transaction_id = tp.transaction_id
 JOIN merchant m 
